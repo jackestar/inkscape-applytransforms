@@ -4,14 +4,11 @@
 # Copyright Mark "Klowner" Riedesel
 # https://github.com/Klowner/inkscape-applytransforms
 #
-import math
-
 import inkex
-
-# For Inkscape 1.0+
+import math
 from inkex.paths import CubicSuperPath, Path
-from inkex.styles import Style
 from inkex.transforms import Transform
+from inkex.styles import Style
 
 NULL_TRANSFORM = Transform([[1.0, 0.0, 0.0], [0.0, 1.0, 0.0]])
 
