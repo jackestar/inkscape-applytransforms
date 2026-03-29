@@ -367,17 +367,16 @@ class ApplyTransform(inkex.EffectExtension):
             inkex.addNS("polyline", "svg"),
         ]:
             points = node.get("points")
-            points = points.strip().split(" ")
-            for k, p in enumerate(points):
-                if "," in p:
-                    p = p.split(",")
-                    p = [float(p[0]), float(p[1])]
+            if points:
+                import re
+                numbers =[float(x) for x in re.findall(r'-?[0-9]*\.?[0-9]+(?:[eE][-+]?[0-9]+)?', points)]
+                transformed_points =[]
+                for i in range(0, len(numbers) - 1, 2):
+                    p = [numbers[i], numbers[i+1]]
                     p = transf.apply_to_point(p)
-                    p = [str(p[0]), str(p[1])]
-                    p = ",".join(p)
-                    points[k] = p
-            points = " ".join(points)
-            node.set("points", points)
+                    # Convert to str() to match legacy python string representations for Pytest comparisons
+                    transformed_points.append(f"{str(p[0])},{str(p[1])}")
+                node.set("points", " ".join(transformed_points))
 
             self.scaleStrokeWidth(node, transf)
 
