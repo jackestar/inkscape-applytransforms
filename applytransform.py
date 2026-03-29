@@ -135,6 +135,64 @@ class ApplyTransform(inkex.EffectExtension):
             tr = Transform(f"rotate({angle:.6f},{new_cx:.6f},{new_cy:.6f})")
             node.set("transform", tr)
 
+    def transformShapeInside(self, node, transf: Transform):
+        try:
+            import re
+            import copy
+            import uuid
+            
+            for shape_prop in["shape-inside", "shape-subtract"]:
+                shape_id = None
+                
+                # Check style attribute FIRST
+                style_attr = node.get("style", "")
+                if f"{shape_prop}:url(#" in style_attr:
+                    m = re.search(f'{shape_prop}:url\\(#([^)]+)\\)', style_attr)
+                    if m:
+                        shape_id = m.group(1)
+                        
+                # Fall back to attribute
+                elif node.get(shape_prop, "").startswith("url(#"):
+                    shape_id = node.get(shape_prop)[5:-1]
+                    
+                if not shape_id:
+                    continue
+                    
+                svg_root = node.getroottree().getroot()
+                shape = None
+                for elem in svg_root.iter():
+                    if elem.get('id') == shape_id:
+                        shape = elem
+                        break
+                        
+                if shape is None:
+                    continue
+                    
+                # To avoid double-transforming shared shapes, duplicate it.
+                new_shape = copy.deepcopy(shape)
+                new_id = f"{shape_id}-transformed-{uuid.uuid4().hex[:8]}"
+                new_shape.set("id", new_id)
+                
+                # <defs>
+                defs = svg_root.find(inkex.addNS("defs", "svg"))
+                if defs is None:
+                    defs = inkex.etree.SubElement(svg_root, inkex.addNS("defs", "svg"))
+                defs.append(new_shape)
+                
+                # Update the text's reference
+                if f"{shape_prop}:url(#" in style_attr:
+                    new_style = re.sub(f'{shape_prop}:url\\(#[^)]+\\)', f'{shape_prop}:url(#{new_id})', style_attr)
+                    node.set("style", new_style)
+                    style_attr = new_style # update for next iteration
+                elif shape_prop in node.attrib:
+                    node.set(shape_prop, f"url(#{new_id})")
+                    
+                # Apply the accumulated transform to the new shape
+                self.recursiveFuseTransform(new_shape, transf)
+                
+        except Exception as e:
+            inkex.utils.errormsg(f"Error transforming shape-inside for {node.get('id')}: {str(e)}")
+
     def transformText(self, node, transf: Transform):
         x, y = transf.apply_to_point((float(node.get("x", 0)), float(node.get("y", 0))))
         node.set("x", str(x))
@@ -407,6 +465,7 @@ class ApplyTransform(inkex.EffectExtension):
             self.scaleStrokeWidth(node, transf)
 
         elif node.tag == inkex.addNS("text", "svg"):
+            self.transformShapeInside(node, transf)
             self.transformText(node, transf)
             self.scaleStyleAttrib(node, transf, "font-size")
 
